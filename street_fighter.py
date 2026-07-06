@@ -6,7 +6,7 @@ class Fighter:
     def __init__(self, start_x: int, start_y: int, color: tuple):
 
         # general
-        self.rect = pygame.Rect(start_x, start_y, 50, 100) # hitbox
+        self.rect = pygame.Rect(start_x, start_y, 50, 100) # hitbox, might need the width to be 70
         self.color = color
         self.speed = 10
         self.health = 100
@@ -27,9 +27,13 @@ class Fighter:
         self.has_hit = False
         self.current_attack_damage = 0
         self.attack_offset_y = 0
+        self.is_hit = False
+        self.hitstun_timer = 0
+        self.current_kb_x = 0
+        self.current_kb_y = 0
 
     def jump(self, moving_left: bool, moving_right: bool):
-        if not self.is_jumping:
+        if not self.is_jumping and not self.is_hit: # might need "and not self.is_attacking"
             self.vel_y = self.jump_power
             self.is_jumping = True
 
@@ -41,25 +45,25 @@ class Fighter:
                 self.vel_x = 0
 
     def crouch(self):
-        if not self.is_crouching and not self.is_jumping and not self.is_attacking:
+        if not self.is_crouching and not self.is_jumping and not self.is_attacking and not self.is_hit:
             self.rect = pygame.Rect(self.rect.x, self.rect.y + self.rect.height / 2, self.rect.width, self.rect.height / 2)
             self.is_crouching = True
 
     def uncrouch(self):
-        if self.is_crouching and not self.is_attacking:
+        if self.is_crouching and not self.is_attacking and not self.is_hit:
             self.rect = pygame.Rect(self.rect.x, self.rect.y - self.rect.height, self.rect.width, self.rect.height * 2)
             self.is_crouching = False
 
     def move_right(self):
-        if not self.is_jumping and not self.is_crouching and not self.is_attacking:
+        if not self.is_jumping and not self.is_crouching and not self.is_attacking and not self.is_hit:
             self.rect.x += self.speed
 
     def move_left(self):
-        if not self.is_jumping and not self.is_crouching and not self.is_attacking:
+        if not self.is_jumping and not self.is_crouching and not self.is_attacking and not self.is_hit:
             self.rect.x -= self.speed
     
     def attack(self, target, attack_type: str):
-        if not self.is_attacking:
+        if not self.is_attacking and not self.is_hit:
             self.is_attacking = True
             self.has_hit = False
 
@@ -68,33 +72,47 @@ class Fighter:
                 self.attack_timer = 10
                 self.current_attack_damage = 10
                 reach = 50
+                self.current_kb_x = 5
+                self.current_kb_y = -5
             elif attack_type == "medium":
                 self.attack_timer = 20
                 self.current_attack_damage = 20
                 reach = 75
+                self.current_kb_x = 8
+                self.current_kb_y = -8
             elif attack_type == "heavy":
                 self.attack_timer = 30
                 self.current_attack_damage = 30
                 reach = 100
+                self.current_kb_x = 12
+                self.current_kb_y = -12
 
             # ---- kicks ----
             elif attack_type == "light_kick":
                 self.attack_timer = 12
                 self.current_attack_damage = 12
                 reach = 55
+                self.current_kb_x = 6
+                self.current_kb_y = -6
             elif attack_type == "medium_kick":
                 self.attack_timer = 22
                 self.current_attack_damage = 22
                 reach = 80
+                self.current_kb_x = 10
+                self.current_kb_y = -10
             elif attack_type == "heavy_kick":
                 self.attack_timer = 35
                 self.current_attack_damage = 35
                 reach = 110
+                self.current_kb_x = 15
+                self.current_kb_y = -15
             else:
                 print(f"unknown keyword {attack_type}")
                 self.attack_timer = 10
                 self.current_attack_damage = 10
                 reach = 50
+                self.current_kb_x = 5
+                self.current_kb_y = -5
 
             self.facing_right = self.rect.centerx < target.rect.centerx
 
@@ -114,7 +132,7 @@ class Fighter:
         self.vel_y += self.gravity
         self.rect.y += self.vel_y
 
-        if self.is_jumping:
+        if self.is_jumping or self.is_hit:
             self.rect.x += self.vel_x
 
         floor = screen_height - 100
@@ -129,6 +147,13 @@ class Fighter:
         
         if self.rect.right > screen_width:
             self.rect.right = screen_width
+
+        if self.is_hit:
+            self.hitstun_timer -= 1
+            if self.hitstun_timer == 0:
+                self.is_hit = False
+                if not self.is_jumping:
+                    self.vel_x = 0
 
         if self.is_attacking:
             self.attack_timer -= 1
@@ -146,12 +171,28 @@ class Fighter:
                     self.has_hit = True
                     print(f"target health is now {target.health}")
 
+                    target.is_hit = True
+                    target.hitstun_timer = 20
+
+                    target.vel_y = self.current_kb_y
+
+                    if target.vel_y < 0:
+                        target.is_jumping = True
+
+                    if self.facing_right:
+                        target.vel_x = self.current_kb_x
+                    else:
+                        target.vel_x = -self.current_kb_x
+
             if self.attack_timer == 0:
                 self.is_attacking = False
                 self.attack_rect = None
 
     def draw(self, screen):
-        pygame.draw.rect(screen, self.color, self.rect)
+        if self.is_hit:
+            pygame.draw.rect(screen, (0, 255, 0), self.rect)
+        else:
+            pygame.draw.rect(screen, self.color, self.rect)
 
         if self.is_attacking and self.attack_rect:
             pygame.draw.rect(screen, (0, 0, 0), self.attack_rect)
@@ -187,33 +228,53 @@ while running:
         
         if event.type == pygame.KEYDOWN:
             
-            if event.key == pygame.K_u:
+            # player 1 attacks
+            if event.key == pygame.K_r:
                 player1.attack(player2, "light")
 
-            if event.key == pygame.K_i:
+            if event.key == pygame.K_t:
                 player1.attack(player2, "medium")
 
-            if event.key == pygame.K_o:
+            if event.key == pygame.K_y:
                 player1.attack(player2, "heavy")
 
-            if event.key == pygame.K_j:
+            if event.key == pygame.K_f:
                 player1.attack(player2, "light_kick")
 
-            if event.key == pygame.K_k:
+            if event.key == pygame.K_g:
                 player1.attack(player2, "medium_kick")
 
-            if event.key == pygame.K_l:
+            if event.key == pygame.K_h:
                 player1.attack(player2, "heavy_kick")
+
+            # player 2 attacks
+            if event.key == pygame.K_0:
+                player2.attack(player1, "light")
+
+            if event.key == pygame.K_MINUS:
+                player2.attack(player1, "medium")
+
+            if event.key == pygame.K_EQUALS:
+                player2.attack(player1, "heavy")
+
+            if event.key == pygame.K_p:
+                player2.attack(player1, "light_kick")
+
+            if event.key == pygame.K_LEFTBRACKET:
+                player2.attack(player1, "medium_kick")
+
+            if event.key == pygame.K_RIGHTBRACKET:
+                player2.attack(player1, "heavy_kick")
 
     keys = pygame.key.get_pressed()
 
-    is_pressing_right = keys[pygame.K_d] or keys[pygame.K_RIGHT]
-    is_pressing_left = keys[pygame.K_a] or keys[pygame.K_LEFT]
+    is_pressing_right = keys[pygame.K_d]
+    is_pressing_left = keys[pygame.K_a]
 
-    if keys[pygame.K_w] or keys[pygame.K_UP]:
+    if keys[pygame.K_w]:
         player1.jump(is_pressing_left, is_pressing_right)
 
-    if keys[pygame.K_s] or keys[pygame.K_DOWN]:
+    if keys[pygame.K_s]:
         player1.crouch()
     else:
         player1.uncrouch()
@@ -224,6 +285,23 @@ while running:
     if is_pressing_left:
         player1.move_left()
 
+    p2_is_pressing_right = keys[pygame.K_l]
+    p2_is_pressing_left = keys[pygame.K_j]
+
+    if keys[pygame.K_i]:
+        player2.jump(p2_is_pressing_left, p2_is_pressing_right)
+    
+    if keys[pygame.K_k]:
+        player2.crouch()
+    else:
+        player2.uncrouch()
+
+    if p2_is_pressing_right:
+        player2.move_right()
+
+    if p2_is_pressing_left:
+        player2.move_left()
+
     if keys[pygame.K_ESCAPE]:
         running = False
     
@@ -232,8 +310,11 @@ while running:
     player1.update(screen_height, screen_width, player2)
     player2.update(screen_height, screen_width, player1)
 
-    player1_health_bar = pygame.Rect(50, 50, player1.health * 2, 50)
-    player2_health_bar = pygame.Rect(screen_width - 50 - player2.health * 2, 50, player2.health * 2, 50)
+    p1_display_health = max(0, player1.health)
+    p2_display_health = max(0, player2.health) # if health < 0, health = 0 for display purposes
+
+    player1_health_bar = pygame.Rect(50, 50, p1_display_health * 2, 50)
+    player2_health_bar = pygame.Rect(screen_width - 50 - p2_display_health * 2, 50, p2_display_health * 2, 50)
 
     pygame.draw.rect(screen, (255, 0, 0), player1_health_bar)
     pygame.draw.rect(screen, (255, 0, 0), player2_health_bar)
