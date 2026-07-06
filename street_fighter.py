@@ -25,6 +25,8 @@ class Fighter:
         self.attack_rect = None
         self.facing_right = True
         self.has_hit = False
+        self.current_attack_damage = 0
+        self.attack_offset_y = 0
 
     def jump(self, moving_left: bool, moving_right: bool):
         if not self.is_jumping:
@@ -39,36 +41,73 @@ class Fighter:
                 self.vel_x = 0
 
     def crouch(self):
-        if not self.is_crouching and not self.is_jumping:
+        if not self.is_crouching and not self.is_jumping and not self.is_attacking:
             self.rect = pygame.Rect(self.rect.x, self.rect.y + self.rect.height / 2, self.rect.width, self.rect.height / 2)
             self.is_crouching = True
 
     def uncrouch(self):
-        if self.is_crouching:
+        if self.is_crouching and not self.is_attacking:
             self.rect = pygame.Rect(self.rect.x, self.rect.y - self.rect.height, self.rect.width, self.rect.height * 2)
             self.is_crouching = False
 
     def move_right(self):
-        if not self.is_jumping and not self.is_crouching:
+        if not self.is_jumping and not self.is_crouching and not self.is_attacking:
             self.rect.x += self.speed
 
     def move_left(self):
-        if not self.is_jumping and not self.is_crouching:
+        if not self.is_jumping and not self.is_crouching and not self.is_attacking:
             self.rect.x -= self.speed
     
-    def attack(self, target):
+    def attack(self, target, attack_type: str):
         if not self.is_attacking:
             self.is_attacking = True
-            self.attack_timer = 10   # attack hitbox stays for 10 frames
-
             self.has_hit = False
+
+            # ---- punches ----
+            if attack_type == "light":
+                self.attack_timer = 10
+                self.current_attack_damage = 10
+                reach = 50
+            elif attack_type == "medium":
+                self.attack_timer = 20
+                self.current_attack_damage = 20
+                reach = 75
+            elif attack_type == "heavy":
+                self.attack_timer = 30
+                self.current_attack_damage = 30
+                reach = 100
+
+            # ---- kicks ----
+            elif attack_type == "light_kick":
+                self.attack_timer = 12
+                self.current_attack_damage = 12
+                reach = 55
+            elif attack_type == "medium_kick":
+                self.attack_timer = 22
+                self.current_attack_damage = 22
+                reach = 80
+            elif attack_type == "heavy_kick":
+                self.attack_timer = 35
+                self.current_attack_damage = 35
+                reach = 110
+            else:
+                print(f"unknown keyword {attack_type}")
+                self.attack_timer = 10
+                self.current_attack_damage = 10
+                reach = 50
 
             self.facing_right = self.rect.centerx < target.rect.centerx
 
-            if self.facing_right:
-                self.attack_rect = pygame.Rect(self.rect.right, self.rect.y + 20, 50, 20)
+            if "kick" in attack_type:
+                if self.is_crouching: self.attack_offset_y = 30
+                else: self.attack_offset_y = 70
             else:
-                self.attack_rect = pygame.Rect(self.rect.left - 50, self.rect.y + 20, 50, 20)
+                self.attack_offset_y = 10
+
+            if self.facing_right:
+                self.attack_rect = pygame.Rect(self.rect.right, self.attack_offset_y, reach, 20)
+            else:
+                self.attack_rect = pygame.Rect(self.rect.left - reach, self.attack_offset_y, reach, 20)
 
     def update(self, screen_height: int, screen_width: int, target):
         
@@ -100,10 +139,10 @@ class Fighter:
                 else:
                     self.attack_rect.right = self.rect.left
 
-                self.attack_rect.y = self.rect.y + 20
+                self.attack_rect.y = self.rect.y + self.attack_offset_y
 
                 if self.attack_rect.colliderect(target.rect) and not self.has_hit:
-                    target.health -= 10
+                    target.health -= self.current_attack_damage
                     self.has_hit = True
                     print(f"target health is now {target.health}")
 
@@ -147,8 +186,24 @@ while running:
             running = False
         
         if event.type == pygame.KEYDOWN:
+            
             if event.key == pygame.K_u:
-                player1.attack(player2)
+                player1.attack(player2, "light")
+
+            if event.key == pygame.K_i:
+                player1.attack(player2, "medium")
+
+            if event.key == pygame.K_o:
+                player1.attack(player2, "heavy")
+
+            if event.key == pygame.K_j:
+                player1.attack(player2, "light_kick")
+
+            if event.key == pygame.K_k:
+                player1.attack(player2, "medium_kick")
+
+            if event.key == pygame.K_l:
+                player1.attack(player2, "heavy_kick")
 
     keys = pygame.key.get_pressed()
 
