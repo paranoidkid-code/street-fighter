@@ -31,6 +31,7 @@ class Fighter:
         self.hitstun_timer = 0
         self.current_kb_x = 0
         self.current_kb_y = 0
+        self.is_blocking = False
 
     def jump(self, moving_left: bool, moving_right: bool):
         if not self.is_jumping and not self.is_hit: # might need "and not self.is_attacking"
@@ -129,6 +130,9 @@ class Fighter:
 
     def update(self, screen_height: int, screen_width: int, target):
         
+        if not self.is_attacking:
+            self.facing_right = target.rect.centerx > self.rect.centerx
+
         self.vel_y += self.gravity
         self.rect.y += self.vel_y
 
@@ -147,6 +151,12 @@ class Fighter:
         
         if self.rect.right > screen_width:
             self.rect.right = screen_width
+
+        if self.rect.colliderect(target.rect):
+            if self.rect.centerx > target.rect.centerx:
+                self.rect.left = target.rect.right
+            else:
+                self.rect.right = target.rect.left
 
         if self.is_hit:
             self.hitstun_timer -= 1
@@ -167,29 +177,41 @@ class Fighter:
                 self.attack_rect.y = self.rect.y + self.attack_offset_y
 
                 if self.attack_rect.colliderect(target.rect) and not self.has_hit:
-                    target.health -= self.current_attack_damage
                     self.has_hit = True
-                    print(f"target health is now {target.health}")
-
-                    target.is_hit = True
-                    target.hitstun_timer = 20
-
-                    target.vel_y = self.current_kb_y
-
-                    if target.vel_y < 0:
-                        target.is_jumping = True
-
-                    if self.facing_right:
-                        target.vel_x = self.current_kb_x
+                    if target.is_blocking and not target.is_jumping:
+                        print("BLOCKED!")
+                        target.is_hit = True
+                        target.hitstun_timer = 10
+                        target.vel_y = 0
+                        if self.facing_right:
+                            target.vel_x = self.current_kb_x * 0.5
+                        else:
+                            target.vel_x = -self.current_kb_x * 0.5
                     else:
-                        target.vel_x = -self.current_kb_x
+                        target.health -= self.current_attack_damage
+                        print(f"target health is now {target.health}")
+
+                        target.is_hit = True
+                        target.hitstun_timer = 20
+
+                        target.vel_y = self.current_kb_y
+
+                        if target.vel_y < 0:
+                            target.is_jumping = True
+
+                        if self.facing_right:
+                            target.vel_x = self.current_kb_x
+                        else:
+                            target.vel_x = -self.current_kb_x
 
             if self.attack_timer == 0:
                 self.is_attacking = False
                 self.attack_rect = None
 
     def draw(self, screen):
-        if self.is_hit:
+        if self.is_hit and self.is_blocking:
+            pygame.draw.rect(screen, (100, 100, 100), self.rect)
+        elif self.is_hit:
             pygame.draw.rect(screen, (0, 255, 0), self.rect)
         else:
             pygame.draw.rect(screen, self.color, self.rect)
@@ -268,8 +290,24 @@ while running:
 
     keys = pygame.key.get_pressed()
 
+    player1.is_blocking = False
+    player2.is_blocking = False
+
     is_pressing_right = keys[pygame.K_d]
     is_pressing_left = keys[pygame.K_a]
+
+    if is_pressing_left and player1.facing_right:
+        player1.is_blocking = True
+    elif is_pressing_right and not player1.facing_right:
+        player1.is_blocking = True
+
+    p2_is_pressing_right = keys[pygame.K_l]
+    p2_is_pressing_left = keys[pygame.K_j]
+
+    if p2_is_pressing_left and player2.facing_right:
+        player2.is_blocking = True
+    elif p2_is_pressing_right and not player2.facing_right:
+        player2.is_blocking = True
 
     if keys[pygame.K_w]:
         player1.jump(is_pressing_left, is_pressing_right)
@@ -284,9 +322,6 @@ while running:
 
     if is_pressing_left:
         player1.move_left()
-
-    p2_is_pressing_right = keys[pygame.K_l]
-    p2_is_pressing_left = keys[pygame.K_j]
 
     if keys[pygame.K_i]:
         player2.jump(p2_is_pressing_left, p2_is_pressing_right)
@@ -310,11 +345,14 @@ while running:
     player1.update(screen_height, screen_width, player2)
     player2.update(screen_height, screen_width, player1)
 
-    p1_display_health = max(0, player1.health)
-    p2_display_health = max(0, player2.health) # if health < 0, health = 0 for display purposes
+    p1_display_health = max(0, player1.health) * 4
+    p2_display_health = max(0, player2.health) * 4 # if health < 0, health = 0 for display purposes
 
-    player1_health_bar = pygame.Rect(50, 50, p1_display_health * 2, 50)
-    player2_health_bar = pygame.Rect(screen_width - 50 - p2_display_health * 2, 50, p2_display_health * 2, 50)
+    player1_health_bar = pygame.Rect(50, 50, p1_display_health, 50)
+    player2_health_bar = pygame.Rect(screen_width - 50 - p2_display_health, 50, p2_display_health, 50)
+
+    pygame.draw.rect(screen, (50, 50, 50), (35, 35, 400, 50))
+    pygame.draw.rect(screen, (50, 50, 50), (screen_width - 35 - 400, 35, 400, 50))
 
     pygame.draw.rect(screen, (255, 0, 0), player1_health_bar)
     pygame.draw.rect(screen, (255, 0, 0), player2_health_bar)
